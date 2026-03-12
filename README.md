@@ -4,8 +4,8 @@ AI-powered safety shield that sits between chat users and the chat system to pro
 
 This repository contains:
 
-- **Backend** – FastAPI "safety layer" with rule-based AI, evidence vault, and real-time alerts.
-- **Frontend** – React (Vite) demo UI with:
+- **Backend** - FastAPI "safety layer" with rule-based AI, evidence vault, and real-time alerts.
+- **Frontend** - React (Vite) demo UI with:
   - Child chat view
   - Parent dashboard with live alerts
 
@@ -17,7 +17,7 @@ This repository contains:
 
 **Flow**
 
-- Person A (child) ↔ Person B (other user)
+- Person A (child) <-> Person B (other user)
 - Every message goes through the **Child Safety Layer API** before reaching the child.
 - The safety layer:
   - Analyzes the text
@@ -27,14 +27,14 @@ This repository contains:
 
 **Components**
 
-- `backend/` – FastAPI server
-  - `POST /analyze-message` – analyze a message and classify risk (`SAFE | MEDIUM | HIGH`)
-  - `GET /evidence` – evidence vault of all messages
-  - `GET /alerts` – list of alerts (MEDIUM/HIGH)
-  - `WS /ws/alerts` – WebSocket for live parent alerts
-- `frontend/` – React Vite app
-  - `ChildChat` – send messages and see in-chat warnings/delays
-  - `ParentDashboard` – see real-time alerts via WebSocket
+- `backend/` - FastAPI server
+  - `POST /analyze-message` - analyze a message and classify risk (`SAFE | MEDIUM | HIGH`)
+  - `GET /evidence` - evidence vault of all messages
+  - `GET /alerts` - list of alerts (MEDIUM/HIGH)
+  - `WS /ws/alerts` - WebSocket for live parent alerts
+- `frontend/` - React Vite app
+  - `ChildChat` - send messages and see in-chat warnings/delays
+  - `ParentDashboard` - see real-time alerts via WebSocket
 
 For a real production system, this API would sit between a chat service (like Stream Chat) and the users.
 
@@ -97,7 +97,7 @@ Open the URL Vite prints (usually `http://127.0.0.1:5173/`).
 
 ### Child Chat tab
 
-- Type **safe** messages – they appear with a green SAFE badge.
+- Type **safe** messages - they appear with a green SAFE badge.
 - Type **bullying** messages, e.g.:
   - `You are stupid`
   - `Nobody likes you`
@@ -162,11 +162,11 @@ Right now, the app uses **in-memory lists** so it works with zero setup.
 
 To connect a real database (Supabase/Postgres), you can create tables like:
 
-- `users` – id, role (child / parent / other), name
-- `messages` – id, sender_id, receiver_id, text, risk, reason, created_at
-- `alerts` – id, message_id, risk, created_at
+- `users` - id, role (child / parent / other), name
+- `messages` - id, sender_id, receiver_id, text, risk, reason, created_at
+- `alerts` - id, message_id, risk, created_at
 
-See `supabase_schema.sql` (once created) as a starting point for SQL.
+See `supabase_schema.sql` as a starting point for SQL.
 
 Then, in the backend, replace the in-memory `evidence_store` and `alerts_store` with insert/select calls to Supabase.
 
@@ -176,13 +176,13 @@ Then, in the backend, replace the in-memory `evidence_store` and `alerts_store` 
 
 You still need to create and manage accounts yourself, but the process is:
 
-- **Frontend → Netlify**
+- **Frontend -> Netlify**
   - Connect this folder as a site (or push to GitHub and connect repo).
   - Base directory: `frontend`
   - Build command: `npm run build`
   - Publish directory: `dist`
 
-- **Backend → Render / Railway / other**
+- **Backend -> Render / Railway / other**
   - Create a new web service from this project or its repo.
   - Set start command:
     ```bash
@@ -190,14 +190,14 @@ You still need to create and manage accounts yourself, but the process is:
     ```
   - Set environment variables for any DB/keys (`SUPABASE_URL`, `SUPABASE_KEY`, etc.).
 
-Then update the frontend `API_BASE` and `WS_URL` constants to use your deployed backend URLs.
+Then update the frontend API and WebSocket URLs to use your deployed backend URLs.
 
 ---
 
 ## 8. Judge-Friendly Explanation
 
-- **Problem** – children face grooming, cyberbullying, and unsafe media in chat apps.
-- **Solution** – a safety layer that:
+- **Problem** - children face grooming, cyberbullying, and unsafe media in chat apps.
+- **Solution** - a safety layer that:
   - Monitors chat in real time
   - Detects risk with AI/rules
   - Warns/delays harmful content
@@ -210,4 +210,3 @@ Then update the frontend `API_BASE` and `WS_URL` constants to use your deployed 
 - **Impact**
   - Technically strong (real-time, WebSockets, AI logic)
   - Socially impactful (child safety)
-
