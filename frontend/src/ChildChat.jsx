@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 
-const API_BASE = `http://${window.location.hostname || "127.0.0.1"}:8000`;
+const API_BASE = "https://sentinel-project-la8l.onrender.com";
 
 const ChildChat = () => {
   const [senderId] = useState("userB");
