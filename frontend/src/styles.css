@@ -260,11 +260,11 @@ body {
   margin: 10px;
 }
 
-.adult {
+.other-user {
   justify-content: flex-start;
 }
 
-.child {
+.current-user {
   justify-content: flex-end;
 }
 
@@ -274,12 +274,12 @@ body {
   max-width: 65%;
 }
 
-.adult .bubble {
+.other-user .bubble {
   background: #e5e7eb;
   color: black;
 }
 
-.child .bubble {
+.current-user .bubble {
   background: #4f46e5;
   color: white;
 }

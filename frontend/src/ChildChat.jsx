@@ -17,6 +17,8 @@ export default function ChildChat({ session }) {
   const wsRef = useRef(null);
   const galleryInputRef = useRef(null);
   const cameraInputRef = useRef(null);
+  const currentRole = session?.role === "adult" ? "adult" : "child";
+  const otherRole = currentRole === "adult" ? "child" : "adult";
 
   useEffect(() => {
     const ws = new WebSocket(CHAT_WS_URL);
@@ -79,7 +81,7 @@ export default function ChildChat({ session }) {
       return;
     }
 
-    const role = "child";
+    const role = currentRole;
 
     const reader = new FileReader();
     reader.onload = async () => {
@@ -143,7 +145,7 @@ export default function ChildChat({ session }) {
 
     const rawText = text.trim();
     const msg = rawText.toLowerCase();
-    const role = "child";
+    const role = currentRole;
 
     try {
       const res = await fetch(`${API_BASE}/analyze-message`, {
@@ -153,7 +155,7 @@ export default function ChildChat({ session }) {
         },
         body: JSON.stringify({
           sender_id: session?.name ?? role,
-          receiver_id: "childA",
+          receiver_id: otherRole,
           message: rawText,
         }),
       });
@@ -217,11 +219,12 @@ export default function ChildChat({ session }) {
 
         <div className="chat-window">
           {messages.map((m, i) => {
-            const role = m.sender === "adult" ? "adult" : "child";
+            const role = m.sender === currentRole ? "current-user" : "other-user";
+            const senderLabel = m.sender === currentRole ? currentRole : otherRole;
             return (
               <div key={i} className={`message ${role}`}>
                 <div className="bubble">
-                  <div className="sender">{role === "adult" ? "Adult" : "Child"}</div>
+                  <div className="sender">{senderLabel === "adult" ? "Adult" : "Child"}</div>
                   {m.text}
                   {m.image && <img src={m.image} className="chat-image" alt="Pasted chat content" />}
                   {m.warning && <div className="warning">Warning: {m.warning}</div>}

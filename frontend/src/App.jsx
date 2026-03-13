@@ -87,9 +87,13 @@ const App = () => {
       return;
     }
 
+    const numericAge = Number(age);
+    const role = Number.isFinite(numericAge) && numericAge >= 19 ? "adult" : "child";
+
     setSession({
       name: name.trim(),
       age: age.trim(),
+      role,
       status: "online",
     });
     setView("child");
@@ -152,7 +156,7 @@ const App = () => {
         <p>AI safety shield for chat applications</p>
         <div className="session-bar">
           <span>
-            Online as <strong>{session.name}</strong>, age {session.age}
+            Online as <strong>{session.name}</strong>, age {session.age} ({session.role})
           </span>
           <button className="session-action" onClick={handleLogout}>
             Log out

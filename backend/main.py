@@ -364,13 +364,10 @@ def send_sms(text: str) -> None:
 
 def build_sms_alert(risk: str, message: str, sender_id: str, message_id: int) -> str:
     return (
-        "SENTINEL CHILD SAFETY ALERT\n\n"
+        "Child Safety Alert\n"
         f"Risk: {risk}\n"
-        f"Message: {message}\n\n"
-        "Approve message:\n"
-        f"https://sentinelproj.netlify.app/approve/{message_id}\n\n"
-        "Block message:\n"
-        f"https://sentinelproj.netlify.app/block/{message_id}"
+        f"Message: {message}\n"
+        f"From: {sender_id}"
     )
 
 
