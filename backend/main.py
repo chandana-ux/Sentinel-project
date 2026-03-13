@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import importlib
 import os
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -16,12 +17,11 @@ classifier: Any = None
 pipeline: Any = None
 
 try:
-    from supabase import create_client
-
     SUPABASE_URL = os.getenv("SUPABASE_URL")
     SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 
     if SUPABASE_URL and SUPABASE_KEY:
+        create_client = importlib.import_module("supabase").create_client
         supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
         SUPABASE_ENABLED = True
 except Exception:
@@ -40,14 +40,13 @@ TWILIO_ENABLED = False
 twilio_client = None
 
 try:
-    from twilio.rest import Client
-
     ACCOUNT_SID = os.getenv("TWILIO_ACCOUNT_SID")
     AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN")
     TWILIO_FROM = os.getenv("TWILIO_FROM_NUMBER")
     PARENT_PHONE = os.getenv("PARENT_PHONE_NUMBER")
 
     if ACCOUNT_SID and AUTH_TOKEN and TWILIO_FROM and PARENT_PHONE:
+        Client = importlib.import_module("twilio.rest").Client
         twilio_client = Client(ACCOUNT_SID, AUTH_TOKEN)
         TWILIO_ENABLED = True
 except Exception:
@@ -339,3 +338,8 @@ async def chat_socket(ws: WebSocket):
     finally:
         if ws in chat_clients:
             chat_clients.remove(ws)
+
+
+if __name__ == "__main__":
+    uvicorn = importlib.import_module("uvicorn")
+    uvicorn.run(app, host="127.0.0.1", port=8000, reload=False)
