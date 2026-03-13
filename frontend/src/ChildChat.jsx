@@ -10,7 +10,7 @@ const DANGEROUS_WORDS = [
   "where do you live",
 ];
 
-export default function ChildChat() {
+export default function ChildChat({ session }) {
   const [messages, setMessages] = useState([]);
   const [text, setText] = useState("");
   const [error, setError] = useState("");
@@ -79,7 +79,7 @@ export default function ChildChat() {
       return;
     }
 
-    const role = messages.length % 2 === 0 ? "adult" : "child";
+    const role = "child";
 
     const reader = new FileReader();
     reader.onload = async () => {
@@ -143,14 +143,7 @@ export default function ChildChat() {
 
     const rawText = text.trim();
     const msg = rawText.toLowerCase();
-    const role = messages.length % 2 === 0 ? "adult" : "child";
-
-    for (const word of DANGEROUS_WORDS) {
-      if (role === "child" && msg.includes(word)) {
-        alert("Warning: This message may be unsafe or inappropriate.");
-        return;
-      }
-    }
+    const role = "child";
 
     try {
       const res = await fetch(`${API_BASE}/analyze-message`, {
@@ -159,7 +152,7 @@ export default function ChildChat() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          sender_id: role,
+          sender_id: session?.name ?? role,
           receiver_id: "childA",
           message: rawText,
         }),
@@ -177,10 +170,15 @@ export default function ChildChat() {
         payload.warning = "Message flagged as risky. Parent approval required.";
       } else if (data.risk === "HIGH") {
         payload.warning = "This message may be dangerous.";
+      } else if (data.risk === "MEDIUM" || DANGEROUS_WORDS.some((word) => msg.includes(word))) {
+        payload.warning = "This message was flagged and the parent notification was sent.";
       }
 
       if (wsRef.current?.readyState === WebSocket.OPEN) {
         wsRef.current.send(JSON.stringify(payload));
+      } else {
+        setMessages((prev) => [...prev, payload]);
+        setError("Live chat is reconnecting. Your message was shown locally and parent checks still ran.");
       }
 
       setText("");
@@ -219,7 +217,7 @@ export default function ChildChat() {
 
         <div className="chat-window">
           {messages.map((m, i) => {
-            const role = i % 2 === 0 ? "adult" : "child";
+            const role = m.sender === "adult" ? "adult" : "child";
             return (
               <div key={i} className={`message ${role}`}>
                 <div className="bubble">

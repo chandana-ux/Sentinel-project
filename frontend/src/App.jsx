@@ -2,14 +2,12 @@ import React, { useEffect, useState } from "react";
 import ChildChat from "./ChildChat.jsx";
 import ParentDashboard from "./ParentDashboard.jsx";
 
-const DEMO_PARENT_PIN = "1234";
 const API_BASE = "https://sentinel-project-la8l.onrender.com";
 
 const App = () => {
   const [approvalPage, setApprovalPage] = useState(null);
-  const [role, setRole] = useState("child");
   const [name, setName] = useState("");
-  const [pin, setPin] = useState("");
+  const [age, setAge] = useState("");
   const [authError, setAuthError] = useState("");
   const [session, setSession] = useState(null);
   const [view, setView] = useState("child");
@@ -84,25 +82,24 @@ const App = () => {
       return;
     }
 
-    if (role === "parent" && pin !== DEMO_PARENT_PIN) {
-      setAuthError("Parent PIN is incorrect. Use 1234 for the demo.");
+    if (!age.trim()) {
+      setAuthError("Enter your age to continue.");
       return;
     }
 
     setSession({
-      role,
       name: name.trim(),
+      age: age.trim(),
+      status: "online",
     });
-    setView(role === "parent" ? "parent" : "child");
+    setView("child");
     setAuthError("");
-    setPin("");
   };
 
   const handleLogout = () => {
     setSession(null);
     setName("");
-    setPin("");
-    setRole("child");
+    setAge("");
     setView("child");
     setAuthError("");
   };
@@ -113,57 +110,35 @@ const App = () => {
         <div className="login-card">
           <div className="login-copy">
             <p className="eyebrow">Sentinel Access</p>
-            <h1>Sign in to the safety layer</h1>
+            <h1>Go online with Sentinel</h1>
             <p>
-              Use Child mode to test the chat experience, or Parent mode to open
-              the live alert dashboard.
+              Enter a name and age to open the chat. Parent notifications still
+              stay active in the background for risky content.
             </p>
           </div>
 
           <form className="login-form" onSubmit={handleLogin}>
-            <div className="role-toggle" aria-label="Choose login role">
-              <button
-                type="button"
-                className={role === "child" ? "role-chip active" : "role-chip"}
-                onClick={() => setRole("child")}
-              >
-                Child
-              </button>
-              <button
-                type="button"
-                className={role === "parent" ? "role-chip active" : "role-chip"}
-                onClick={() => setRole("parent")}
-              >
-                Parent
-              </button>
-            </div>
-
             <label className="field">
               <span>Name</span>
               <input
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder={role === "parent" ? "Parent name" : "Child name"}
+                placeholder="Your name"
               />
             </label>
 
-            {role === "parent" && (
-              <label className="field">
-                <span>Demo PIN</span>
-                <input
-                  type="password"
-                  value={pin}
-                  onChange={(e) => setPin(e.target.value)}
-                  placeholder="Enter 1234"
-                />
-              </label>
-            )}
+            <label className="field">
+              <span>Age</span>
+              <input
+                value={age}
+                onChange={(e) => setAge(e.target.value)}
+                placeholder="Your age"
+              />
+            </label>
 
             {authError && <div className="error-banner">{authError}</div>}
 
-            <button type="submit" className="login-submit">
-              Continue as {role === "parent" ? "Parent" : "Child"}
-            </button>
+            <button type="submit" className="login-submit">Go Online</button>
           </form>
         </div>
       </div>
@@ -177,7 +152,7 @@ const App = () => {
         <p>AI safety shield for chat applications</p>
         <div className="session-bar">
           <span>
-            Signed in as <strong>{session.name}</strong> ({session.role})
+            Online as <strong>{session.name}</strong>, age {session.age}
           </span>
           <button className="session-action" onClick={handleLogout}>
             Log out
@@ -199,7 +174,7 @@ const App = () => {
         </div>
       </header>
       <main className="app-main">
-        {view === "child" ? <ChildChat /> : <ParentDashboard />}
+        {view === "child" ? <ChildChat session={session} /> : <ParentDashboard />}
       </main>
     </div>
   );
