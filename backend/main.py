@@ -1,6 +1,8 @@
+from __future__ import annotations
+
 from datetime import datetime, timezone
 import os
-from typing import List
+from typing import Any, Dict, List, Optional, Tuple
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
@@ -8,9 +10,10 @@ from pydantic import BaseModel
 
 
 SUPABASE_ENABLED = False
-supabase = None
+supabase: Any = None
 AI_CLASSIFIER_ENABLED = False
-classifier = None
+classifier: Any = None
+pipeline: Any = None
 
 try:
     from supabase import create_client
@@ -26,7 +29,8 @@ except Exception:
 
 
 try:
-    from transformers import pipeline
+    from transformers import pipeline as transformers_pipeline
+    pipeline = transformers_pipeline
 except Exception:
     pipeline = None
     print("Transformers package not configured")
@@ -80,8 +84,8 @@ class MessageResponse(BaseModel):
     reason: str
 
 
-messages = []
-alerts = []
+messages: List[Dict[str, Any]] = []
+alerts: List[Dict[str, Any]] = []
 websocket_clients: List[WebSocket] = []
 chat_clients: List[WebSocket] = []
 
@@ -90,7 +94,7 @@ def utc_now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def get_classifier():
+def get_classifier() -> Any:
     global classifier, AI_CLASSIFIER_ENABLED
 
     if classifier is not None:
@@ -109,7 +113,7 @@ def get_classifier():
     return classifier
 
 
-def detect_risk(message: str):
+def detect_risk(message: str) -> Tuple[str, str]:
     ai_classifier = get_classifier()
 
     if ai_classifier is not None:
@@ -155,7 +159,7 @@ def detect_risk(message: str):
     return "SAFE", "No risk detected"
 
 
-def save_message_db(record) -> int | None:
+def save_message_db(record: Dict[str, Any]) -> Optional[int]:
     if not SUPABASE_ENABLED:
         return None
 
@@ -182,7 +186,7 @@ def save_message_db(record) -> int | None:
     return None
 
 
-def save_alert_db(message_id: int | None, alert) -> None:
+def save_alert_db(message_id: Optional[int], alert: Dict[str, Any]) -> None:
     if not SUPABASE_ENABLED or not message_id:
         return
 
@@ -212,7 +216,7 @@ def send_sms(text: str) -> None:
         print("SMS error", e)
 
 
-async def broadcast_alert(alert, record) -> None:
+async def broadcast_alert(alert: Dict[str, Any], record: Dict[str, Any]) -> None:
     payload = {
         "alert": alert,
         "message": {
@@ -237,7 +241,7 @@ async def broadcast_alert(alert, record) -> None:
             websocket_clients.remove(ws)
 
 
-async def broadcast_chat_message(payload) -> None:
+async def broadcast_chat_message(payload: Dict[str, Any]) -> None:
     dead = []
 
     for ws in chat_clients:
