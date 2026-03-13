@@ -84,7 +84,7 @@ class MessageResponse(BaseModel):
     reason: str
 
 
-messages: List[Dict[str, Any]] = []
+evidence_store: List[Dict[str, Any]] = []
 alerts: List[Dict[str, Any]] = []
 websocket_clients: List[WebSocket] = []
 chat_clients: List[WebSocket] = []
@@ -133,16 +133,55 @@ def detect_risk(message: str) -> Tuple[str, str]:
     text = message.lower()
 
     grooming_patterns = [
-        "how old are you",
+        "you seem very mature for your age",
+        "you’re not like other kids your age",
+        "you're not like other kids",
+        "i feel like i can talk to you about anything",
+        "you're really easy to talk to",
+        "i think we understand each other",
+        "you're special",
+        "you're my favorite person to chat with",
+        "you're very smart for your age",
+        "you seem older than most kids",
+        "do your parents check your phone",
+        "do your parents know you’re talking to me",
+        "do your parents know you're talking to me",
+        "let's keep this between us",
+        "don't tell anyone about our chats",
+        "our friendship is a secret",
+        "your parents wouldn't understand",
+        "they might get mad if they knew",
+        "we don't need to tell anyone about this",
         "where do you live",
-        "are your parents home",
+        "are you home alone",
+        "what school do you go to",
+        "what's your address",
+        "do you have your own room",
+        "what time do your parents get home",
+        "what's your phone number",
+        "let's talk somewhere more private",
+        "do you have telegram",
+        "do you have snapchat",
+        "let's move this chat somewhere else",
+        "add me on another app",
+        "instagram is not safe for talking",
+        "you're the only one who understands me",
+        "i feel lonely and you make me feel better",
+        "you're the only one i trust",
+        "if you stop talking to me i'll be sad",
+        "you're very important to me",
+        "send me a picture of yourself",
         "send me your photo",
-        "send me a photo",
-        "send picture",
-        "send pic",
-        "show me your photo",
-        "dont tell your parents",
+        "send me a selfie",
+        "can i see what you look like",
+        "send a photo just for me",
+        "take a selfie right now",
         "don't tell your parents",
+        "dont tell your parents",
+        "delete our messages",
+        "this is our little secret",
+        "promise you won't tell anyone",
+        "if you tell someone we could get in trouble",
     ]
 
     bullying = [
@@ -154,7 +193,7 @@ def detect_risk(message: str) -> Tuple[str, str]:
 
     for pattern in grooming_patterns:
         if pattern in text:
-            return "HIGH", f"Grooming attempt detected: {pattern}"
+            return "HIGH", f"Grooming behaviour detected: {pattern}"
 
     for phrase in bullying:
         if phrase in text:
@@ -188,6 +227,10 @@ def save_message_db(record: Dict[str, Any]) -> Optional[int]:
         print("Database error", e)
 
     return None
+
+
+def save_message_to_db(record: Dict[str, Any]) -> Optional[int]:
+    return save_message_db(record)
 
 
 def save_alert_db(message_id: Optional[int], alert: Dict[str, Any]) -> None:
@@ -268,7 +311,7 @@ async def analyze_message(data: MessageRequest):
         await asyncio.sleep(5)
 
     record = {
-        "id": len(messages) + 1,
+        "id": len(evidence_store) + 1,
         "sender_id": data.sender_id,
         "receiver_id": data.receiver_id,
         "message": data.message,
@@ -277,11 +320,11 @@ async def analyze_message(data: MessageRequest):
         "created_at": created_at,
     }
 
-    db_message_id = save_message_db(record)
+    db_message_id = save_message_to_db(record)
     if db_message_id:
         record["id"] = db_message_id
 
-    messages.append(record)
+    evidence_store.append(record)
 
     if risk != "SAFE":
         alert = {
@@ -309,7 +352,12 @@ def get_alerts():
 
 @app.get("/messages")
 def get_messages():
-    return list(reversed(messages))
+    return list(reversed(evidence_store))
+
+
+@app.get("/evidence")
+def get_evidence():
+    return list(reversed(evidence_store))
 
 
 @app.get("/health")
