@@ -2,14 +2,6 @@ import React, { useEffect, useRef, useState } from "react";
 
 const API_BASE = "https://sentinel-project-la8l.onrender.com";
 const CHAT_WS_URL = "wss://sentinel-project-la8l.onrender.com/ws/chat";
-const PARTICIPANTS = {
-  userA: {
-    label: "Child",
-  },
-  userB: {
-    label: "Adult",
-  },
-};
 const DANGEROUS_WORDS = [
   "send me your photo",
   "send pic",
@@ -38,7 +30,22 @@ export default function ChildChat() {
       try {
         const payload = JSON.parse(event.data);
         console.log("New chat message", payload);
-        setMessages((prev) => [...prev, payload]);
+        setMessages((prev) => {
+          if (payload.type === "message_update") {
+            return prev.map((message) =>
+              message.id === payload.id
+                ? {
+                    ...message,
+                    text: payload.text,
+                    approval_status: payload.approval_status,
+                    warning: payload.warning ?? undefined,
+                  }
+                : message
+            );
+          }
+
+          return [...prev, payload];
+        });
       } catch (err) {
         console.error("Invalid chat payload", err);
       }
@@ -72,6 +79,8 @@ export default function ChildChat() {
       return;
     }
 
+    const role = messages.length % 2 === 0 ? "adult" : "child";
+
     const reader = new FileReader();
     reader.onload = async () => {
       const imageData = reader.result;
@@ -92,7 +101,8 @@ export default function ChildChat() {
       setMessages((prev) => [
         ...prev,
         {
-          sender: "userA",
+          id: `image-${Date.now()}`,
+          sender: role,
           text: blocked ? "[Image blocked]" : "[Image sent]",
           image: blocked ? null : imageData,
           risk,
@@ -133,9 +143,10 @@ export default function ChildChat() {
 
     const rawText = text.trim();
     const msg = rawText.toLowerCase();
+    const role = messages.length % 2 === 0 ? "adult" : "child";
 
     for (const word of DANGEROUS_WORDS) {
-      if (msg.includes(word)) {
+      if (role === "child" && msg.includes(word)) {
         alert("Warning: This message may be unsafe or inappropriate.");
         return;
       }
@@ -148,7 +159,7 @@ export default function ChildChat() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          sender_id: "userA",
+          sender_id: role,
           receiver_id: "childA",
           message: rawText,
         }),
@@ -156,11 +167,15 @@ export default function ChildChat() {
 
       const data = await res.json();
       const payload = {
-        sender: "userA",
+        id: data.id,
+        sender: role,
         text: data.message ?? rawText,
+        approval_status: data.approval_status,
       };
 
-      if (data.risk === "HIGH") {
+      if (data.approval_required) {
+        payload.warning = "Message flagged as risky. Parent approval required.";
+      } else if (data.risk === "HIGH") {
         payload.warning = "This message may be dangerous.";
       }
 
@@ -174,8 +189,6 @@ export default function ChildChat() {
       setError("Message failed.");
     }
   };
-
-  const getParticipant = (sender) => PARTICIPANTS[sender] ?? PARTICIPANTS.userB;
 
   return (
     <div className="app-layout">
@@ -206,15 +219,11 @@ export default function ChildChat() {
 
         <div className="chat-window">
           {messages.map((m, i) => {
-            const participant = getParticipant(m.sender);
-
+            const role = i % 2 === 0 ? "adult" : "child";
             return (
-              <div
-                key={i}
-                className={`message ${m.sender === "userA" ? "child-message" : "adult-message"}`}
-              >
+              <div key={i} className={`message ${role}`}>
                 <div className="bubble">
-                  <div className="sender-name">{participant.label}</div>
+                  <div className="sender">{role === "adult" ? "Adult" : "Child"}</div>
                   {m.text}
                   {m.image && <img src={m.image} className="chat-image" alt="Pasted chat content" />}
                   {m.warning && <div className="warning">Warning: {m.warning}</div>}

@@ -84,9 +84,12 @@ class MessageRequest(BaseModel):
 
 
 class MessageResponse(BaseModel):
+    id: int
     risk: str
     reason: str
     message: str
+    approval_required: bool
+    approval_status: str
 
 
 class ImageScanRequest(BaseModel):
@@ -292,6 +295,7 @@ def save_message_db(record: Dict[str, Any]) -> Optional[int]:
                     "risk": record["risk"],
                     "reason": record["reason"],
                     "created_at": record["created_at"],
+                    "approval_status": record["approval_status"],
                 }
             )
             .execute()
@@ -306,6 +310,26 @@ def save_message_db(record: Dict[str, Any]) -> Optional[int]:
 
 def save_message_to_db(record: Dict[str, Any]) -> Optional[int]:
     return save_message_db(record)
+
+
+def update_message_approval_db(record: Dict[str, Any]) -> None:
+    if not SUPABASE_ENABLED:
+        return
+
+    try:
+        (
+            supabase.table("messages")
+            .update(
+                {
+                    "text": record["message"],
+                    "approval_status": record["approval_status"],
+                }
+            )
+            .eq("id", record["id"])
+            .execute()
+        )
+    except Exception as e:
+        print("Message approval update error", e)
 
 
 def save_alert_db(message_id: Optional[int], alert: Dict[str, Any]) -> None:
@@ -338,15 +362,23 @@ def send_sms(text: str) -> None:
         print("SMS error", e)
 
 
-def build_sms_alert(risk: str, message: str, sender_id: str) -> str:
+def build_sms_alert(risk: str, message: str, sender_id: str, message_id: int) -> str:
     return (
         "SENTINEL CHILD SAFETY ALERT\n\n"
-        f"Risk Level: {risk}\n\n"
-        "Suspicious Message:\n"
-        f"\"{message}\"\n\n"
-        f"From: {sender_id}\n\n"
-        "Parent attention recommended."
+        f"Risk: {risk}\n"
+        f"Message: {message}\n\n"
+        "Approve message:\n"
+        f"https://sentinelproj.netlify.app/approve/{message_id}\n\n"
+        "Block message:\n"
+        f"https://sentinelproj.netlify.app/block/{message_id}"
     )
+
+
+def find_message_record(message_id: int) -> Optional[Dict[str, Any]]:
+    for record in evidence_store:
+        if record["id"] == message_id:
+            return record
+    return None
 
 
 async def broadcast_alert(alert: Dict[str, Any], record: Dict[str, Any]) -> None:
@@ -388,15 +420,31 @@ async def broadcast_chat_message(payload: Dict[str, Any]) -> None:
             chat_clients.remove(ws)
 
 
+async def broadcast_chat_update(record: Dict[str, Any]) -> None:
+    await broadcast_chat_message(
+        {
+            "type": "message_update",
+            "id": record["id"],
+            "sender": record["sender_id"],
+            "text": record["message"],
+            "approval_status": record["approval_status"],
+            "warning": (
+                "Message flagged as risky. Parent approval required."
+                if record["approval_status"] == "pending"
+                else None
+            ),
+        }
+    )
+
+
 @app.post("/analyze-message", response_model=MessageResponse)
 async def analyze_message(data: MessageRequest):
     risk, reason = detect_risk(data.message)
     created_at = utc_now_iso()
     original_message = data.message
     message_text = original_message
-
-    if risk == "HIGH":
-        message_text = "[BLOCKED: Inappropriate message detected]"
+    approval_required = risk == "HIGH"
+    approval_status = "pending" if approval_required else "approved"
 
     record = {
         "id": len(evidence_store) + 1,
@@ -406,6 +454,7 @@ async def analyze_message(data: MessageRequest):
         "risk": risk,
         "reason": reason,
         "created_at": created_at,
+        "approval_status": approval_status,
     }
 
     db_message_id = save_message_to_db(record)
@@ -428,14 +477,21 @@ async def analyze_message(data: MessageRequest):
         alerts.append(alert)
         save_alert_db(db_message_id, alert)
         await broadcast_alert(alert, record)
-        send_sms(build_sms_alert(risk, original_message, data.sender_id))
+        send_sms(build_sms_alert(risk, original_message, data.sender_id, record["id"]))
 
     if risk == "HIGH":
         await asyncio.sleep(5)
     elif risk == "MEDIUM":
         await asyncio.sleep(2)
 
-    return {"risk": risk, "reason": reason, "message": message_text}
+    return {
+        "id": record["id"],
+        "risk": risk,
+        "reason": reason,
+        "message": message_text,
+        "approval_required": approval_required,
+        "approval_status": approval_status,
+    }
 
 
 @app.post("/scan-image", response_model=ImageScanResponse)
@@ -447,6 +503,27 @@ async def scan_image(payload: ImageScanRequest):
 @app.get("/alerts")
 def get_alerts():
     return list(reversed(alerts))
+
+
+@app.get("/approve/{msg_id}")
+async def approve_message(msg_id: int):
+    record = find_message_record(msg_id)
+    if record is not None:
+        record["approval_status"] = "approved"
+        update_message_approval_db(record)
+        await broadcast_chat_update(record)
+    return {"status": "approved", "id": msg_id}
+
+
+@app.get("/block/{msg_id}")
+async def block_message(msg_id: int):
+    record = find_message_record(msg_id)
+    if record is not None:
+        record["approval_status"] = "blocked"
+        record["message"] = "[BLOCKED: Inappropriate message detected]"
+        update_message_approval_db(record)
+        await broadcast_chat_update(record)
+    return {"status": "blocked", "id": msg_id}
 
 
 @app.get("/messages")
