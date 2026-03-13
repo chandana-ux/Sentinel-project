@@ -19,6 +19,26 @@ export default function ChildChat({ session }) {
   const cameraInputRef = useRef(null);
   const currentRole = session?.role === "adult" ? "adult" : "child";
   const otherRole = currentRole === "adult" ? "child" : "adult";
+  const currentSenderLabel = session?.name?.trim() || (currentRole === "adult" ? "Adult" : "Child");
+  const otherSenderLabel = otherRole === "adult" ? "Adult" : "Child";
+
+  const normalizeMessage = (payload) => {
+    const senderRole =
+      payload.senderRole ??
+      (payload.sender === currentRole || payload.sender === currentSenderLabel
+        ? currentRole
+        : payload.sender === "adult" || payload.sender === "child"
+          ? payload.sender
+          : otherRole);
+
+    return {
+      ...payload,
+      senderRole,
+      senderLabel:
+        payload.senderLabel ??
+        (senderRole === currentRole ? currentSenderLabel : otherSenderLabel),
+    };
+  };
 
   useEffect(() => {
     const ws = new WebSocket(CHAT_WS_URL);
@@ -46,7 +66,12 @@ export default function ChildChat({ session }) {
             );
           }
 
-          return [...prev, payload];
+          const nextMessage = normalizeMessage(payload);
+          if (nextMessage.id && prev.some((message) => message.id === nextMessage.id)) {
+            return prev;
+          }
+
+          return [...prev, nextMessage];
         });
       } catch (err) {
         console.error("Invalid chat payload", err);
@@ -102,15 +127,16 @@ export default function ChildChat({ session }) {
 
       setMessages((prev) => [
         ...prev,
-        {
+        normalizeMessage({
           id: `image-${Date.now()}`,
-          sender: role,
+          sender: currentSenderLabel,
+          senderRole: role,
           text: blocked ? "[Image blocked]" : "[Image sent]",
           image: blocked ? null : imageData,
           risk,
           warning: blocked ? reason : undefined,
           blocked,
-        },
+        }),
       ]);
     };
 
@@ -161,12 +187,13 @@ export default function ChildChat({ session }) {
       });
 
       const data = await res.json();
-      const payload = {
+      const payload = normalizeMessage({
         id: data.id,
-        sender: role,
+        sender: currentSenderLabel,
+        senderRole: role,
         text: data.message ?? rawText,
         approval_status: data.approval_status,
-      };
+      });
 
       if (data.approval_required) {
         payload.warning = "Message flagged as risky. Parent approval required.";
@@ -179,9 +206,15 @@ export default function ChildChat({ session }) {
       if (wsRef.current?.readyState === WebSocket.OPEN) {
         wsRef.current.send(JSON.stringify(payload));
       } else {
-        setMessages((prev) => [...prev, payload]);
+        setMessages((prev) =>
+          prev.some((message) => message.id === payload.id) ? prev : [...prev, payload]
+        );
         setError("Live chat is reconnecting. Your message was shown locally and parent checks still ran.");
       }
+
+      setMessages((prev) =>
+        prev.some((message) => message.id === payload.id) ? prev : [...prev, payload]
+      );
 
       setText("");
     } catch (err) {
@@ -219,12 +252,11 @@ export default function ChildChat({ session }) {
 
         <div className="chat-window">
           {messages.map((m, i) => {
-            const role = m.sender === currentRole ? "current-user" : "other-user";
-            const senderLabel = m.sender === currentRole ? currentRole : otherRole;
+            const role = m.senderRole === currentRole ? "current-user" : "other-user";
             return (
               <div key={i} className={`message ${role}`}>
                 <div className="bubble">
-                  <div className="sender">{senderLabel === "adult" ? "Adult" : "Child"}</div>
+                  <div className="sender">{m.senderLabel}</div>
                   {m.text}
                   {m.image && <img src={m.image} className="chat-image" alt="Pasted chat content" />}
                   {m.warning && <div className="warning">Warning: {m.warning}</div>}
