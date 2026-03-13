@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 from datetime import datetime, timezone
+from io import BytesIO
 import importlib
 import os
 from typing import Any, Dict, List, Optional, Tuple
@@ -16,6 +18,8 @@ supabase: Any = None
 AI_CLASSIFIER_ENABLED = False
 classifier: Any = None
 pipeline: Any = None
+IMAGE_MODERATION_ENABLED = False
+image_moderator: Any = None
 
 try:
     SUPABASE_URL = os.getenv("SUPABASE_URL")
@@ -82,6 +86,17 @@ class MessageRequest(BaseModel):
 class MessageResponse(BaseModel):
     risk: str
     reason: str
+    message: str
+
+
+class ImageScanRequest(BaseModel):
+    image: str
+
+
+class ImageScanResponse(BaseModel):
+    risk: str
+    reason: str
+    blocked: bool
 
 
 evidence_store: List[Dict[str, Any]] = []
@@ -113,6 +128,67 @@ def get_classifier() -> Any:
     return classifier
 
 
+def decode_image_data(image_data: str) -> Optional[bytes]:
+    if "," not in image_data:
+        return None
+
+    _, encoded = image_data.split(",", 1)
+
+    try:
+        return base64.b64decode(encoded)
+    except Exception:
+        return None
+
+
+def get_image_moderator() -> Any:
+    global image_moderator, IMAGE_MODERATION_ENABLED
+
+    if image_moderator is not None:
+        return image_moderator
+
+    if pipeline is None:
+        return None
+
+    try:
+        image_moderator = pipeline(
+            "image-classification",
+            model="Falconsai/nsfw_image_detection",
+        )
+        IMAGE_MODERATION_ENABLED = True
+    except Exception as e:
+        print("Image moderation model not configured", e)
+        image_moderator = None
+
+    return image_moderator
+
+
+def detect_image_risk(image_data: str) -> Tuple[str, str, bool]:
+    text = image_data.lower()
+
+    if "nsfw" in text:
+        return "HIGH", "Unsafe image content detected", True
+
+    moderator = get_image_moderator()
+    image_bytes = decode_image_data(image_data)
+
+    if moderator is not None and image_bytes is not None:
+        try:
+            image_module = importlib.import_module("PIL.Image")
+            image = image_module.open(BytesIO(image_bytes))
+            results = moderator(image)
+
+            for result in results:
+                label = str(result.get("label", "")).lower()
+                score = float(result.get("score", 0))
+
+                if any(term in label for term in ("nsfw", "porn", "sexy")) and score >= 0.5:
+                    return "HIGH", f"AI image moderation flagged: {label}", True
+        except Exception as e:
+            print("Image moderation error", e)
+
+    return "SAFE", "No unsafe image detected", False
+
+
 def detect_risk(message: str) -> Tuple[str, str]:
     ai_classifier = get_classifier()
 
@@ -134,7 +210,7 @@ def detect_risk(message: str) -> Tuple[str, str]:
 
     grooming_patterns = [
         "you seem very mature for your age",
-        "you’re not like other kids your age",
+        "you're not like other kids your age",
         "you're not like other kids",
         "i feel like i can talk to you about anything",
         "you're really easy to talk to",
@@ -144,7 +220,6 @@ def detect_risk(message: str) -> Tuple[str, str]:
         "you're very smart for your age",
         "you seem older than most kids",
         "do your parents check your phone",
-        "do your parents know you’re talking to me",
         "do your parents know you're talking to me",
         "let's keep this between us",
         "don't tell anyone about our chats",
@@ -263,6 +338,17 @@ def send_sms(text: str) -> None:
         print("SMS error", e)
 
 
+def build_sms_alert(risk: str, message: str, sender_id: str) -> str:
+    return (
+        "SENTINEL CHILD SAFETY ALERT\n\n"
+        f"Risk Level: {risk}\n\n"
+        "Suspicious Message:\n"
+        f"\"{message}\"\n\n"
+        f"From: {sender_id}\n\n"
+        "Parent attention recommended."
+    )
+
+
 async def broadcast_alert(alert: Dict[str, Any], record: Dict[str, Any]) -> None:
     payload = {
         "alert": alert,
@@ -306,15 +392,17 @@ async def broadcast_chat_message(payload: Dict[str, Any]) -> None:
 async def analyze_message(data: MessageRequest):
     risk, reason = detect_risk(data.message)
     created_at = utc_now_iso()
+    original_message = data.message
+    message_text = original_message
 
     if risk == "HIGH":
-        await asyncio.sleep(5)
+        message_text = "[BLOCKED: Inappropriate message detected]"
 
     record = {
         "id": len(evidence_store) + 1,
         "sender_id": data.sender_id,
         "receiver_id": data.receiver_id,
-        "message": data.message,
+        "message": message_text,
         "risk": risk,
         "reason": reason,
         "created_at": created_at,
@@ -334,15 +422,26 @@ async def analyze_message(data: MessageRequest):
             "created_at": created_at,
             "sender_id": record["sender_id"],
             "receiver_id": record["receiver_id"],
-            "text": record["message"],
+            "text": original_message,
             "reason": record["reason"],
         }
         alerts.append(alert)
         save_alert_db(db_message_id, alert)
         await broadcast_alert(alert, record)
-        send_sms(f"Child Safety Alert\nRisk: {risk}\nMessage: {data.message}")
+        send_sms(build_sms_alert(risk, original_message, data.sender_id))
 
-    return {"risk": risk, "reason": reason}
+    if risk == "HIGH":
+        await asyncio.sleep(5)
+    elif risk == "MEDIUM":
+        await asyncio.sleep(2)
+
+    return {"risk": risk, "reason": reason, "message": message_text}
+
+
+@app.post("/scan-image", response_model=ImageScanResponse)
+async def scan_image(payload: ImageScanRequest):
+    risk, reason, blocked = detect_image_risk(payload.image)
+    return {"risk": risk, "reason": reason, "blocked": blocked}
 
 
 @app.get("/alerts")

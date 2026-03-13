@@ -4,20 +4,27 @@ const API_BASE = "https://sentinel-project-la8l.onrender.com";
 const CHAT_WS_URL = "wss://sentinel-project-la8l.onrender.com/ws/chat";
 const PARTICIPANTS = {
   userA: {
-    label: "Person A",
-    avatar: "https://i.pravatar.cc/40?img=1",
+    label: "Child",
   },
   userB: {
-    label: "Person B",
-    avatar: "https://i.pravatar.cc/40?img=2",
+    label: "Adult",
   },
 };
+const DANGEROUS_WORDS = [
+  "send me your photo",
+  "send pic",
+  "send selfie",
+  "dont tell your parents",
+  "where do you live",
+];
 
 export default function ChildChat() {
   const [messages, setMessages] = useState([]);
   const [text, setText] = useState("");
   const [error, setError] = useState("");
   const wsRef = useRef(null);
+  const galleryInputRef = useRef(null);
+  const cameraInputRef = useRef(null);
 
   useEffect(() => {
     const ws = new WebSocket(CHAT_WS_URL);
@@ -46,33 +53,66 @@ export default function ChildChat() {
     };
   }, []);
 
+  const scanImage = async (imageData) => {
+    const res = await fetch(`${API_BASE}/scan-image`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        image: imageData,
+      }),
+    });
+
+    return res.json();
+  };
+
+  const handleImageFile = (file) => {
+    if (!file) {
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = async () => {
+      const imageData = reader.result;
+      let risk = "SAFE";
+      let reason = "No unsafe image detected";
+      let blocked = false;
+
+      try {
+        const data = await scanImage(imageData);
+        risk = data.risk ?? risk;
+        reason = data.reason ?? reason;
+        blocked = Boolean(data.blocked);
+      } catch (err) {
+        console.error(err);
+        reason = "Image scan failed";
+      }
+
+      setMessages((prev) => [
+        ...prev,
+        {
+          sender: "userA",
+          text: blocked ? "[Image blocked]" : "[Image sent]",
+          image: blocked ? null : imageData,
+          risk,
+          warning: blocked ? reason : undefined,
+          blocked,
+        },
+      ]);
+    };
+
+    reader.readAsDataURL(file);
+  };
+
   useEffect(() => {
     const handlePaste = (event) => {
       const items = event.clipboardData?.items ?? [];
 
       for (const item of items) {
-        if (!item.type.includes("image")) {
-          continue;
+        if (item.type.includes("image")) {
+          handleImageFile(item.getAsFile());
         }
-
-        const file = item.getAsFile();
-        if (!file) {
-          continue;
-        }
-
-        const reader = new FileReader();
-        reader.onload = () => {
-          setMessages((prev) => [
-            ...prev,
-            {
-              sender: "userA",
-              text: "[Image sent]",
-              image: reader.result,
-            },
-          ]);
-        };
-
-        reader.readAsDataURL(file);
       }
     };
 
@@ -80,24 +120,28 @@ export default function ChildChat() {
     return () => window.removeEventListener("paste", handlePaste);
   }, []);
 
+  const handleFileSelect = (event) => {
+    const file = event.target.files?.[0];
+    handleImageFile(file);
+    event.target.value = "";
+  };
+
   const sendMessage = async (e) => {
     e.preventDefault();
 
     if (!text.trim()) return;
 
-    const msg = text.trim();
-    setText("");
+    const rawText = text.trim();
+    const msg = rawText.toLowerCase();
 
-    const payload = {
-      sender: "userA",
-      text: msg,
-    };
+    for (const word of DANGEROUS_WORDS) {
+      if (msg.includes(word)) {
+        alert("Warning: This message may be unsafe or inappropriate.");
+        return;
+      }
+    }
 
     try {
-      if (wsRef.current?.readyState === WebSocket.OPEN) {
-        wsRef.current.send(JSON.stringify(payload));
-      }
-
       const res = await fetch(`${API_BASE}/analyze-message`, {
         method: "POST",
         headers: {
@@ -106,21 +150,25 @@ export default function ChildChat() {
         body: JSON.stringify({
           sender_id: "userA",
           receiver_id: "childA",
-          message: msg,
+          message: rawText,
         }),
       });
 
       const data = await res.json();
+      const payload = {
+        sender: "userA",
+        text: data.message ?? rawText,
+      };
 
-      setMessages((prev) => [
-        ...prev,
-        {
-          sender: "userA",
-          text: msg,
-          risk: data.risk,
-          reason: data.reason,
-        },
-      ]);
+      if (data.risk === "HIGH") {
+        payload.warning = "This message may be dangerous.";
+      }
+
+      if (wsRef.current?.readyState === WebSocket.OPEN) {
+        wsRef.current.send(JSON.stringify(payload));
+      }
+
+      setText("");
     } catch (err) {
       console.error(err);
       setError("Message failed.");
@@ -161,17 +209,15 @@ export default function ChildChat() {
             const participant = getParticipant(m.sender);
 
             return (
-              <div key={i} className={`message ${m.sender === "userA" ? "sent" : "received"}`}>
-                <img
-                  className="avatar"
-                  src={participant.avatar}
-                  alt={participant.label}
-                />
-
+              <div
+                key={i}
+                className={`message ${m.sender === "userA" ? "child-message" : "adult-message"}`}
+              >
                 <div className="bubble">
-                  <div className="name">{participant.label}</div>
+                  <div className="sender-name">{participant.label}</div>
                   {m.text}
                   {m.image && <img src={m.image} className="chat-image" alt="Pasted chat content" />}
+                  {m.warning && <div className="warning">Warning: {m.warning}</div>}
                 </div>
               </div>
             );
@@ -179,6 +225,27 @@ export default function ChildChat() {
         </div>
 
         <form className="chat-input" onSubmit={sendMessage}>
+          <input
+            ref={galleryInputRef}
+            className="media-input"
+            type="file"
+            accept="image/*"
+            onChange={handleFileSelect}
+          />
+          <input
+            ref={cameraInputRef}
+            className="media-input"
+            type="file"
+            accept="image/*"
+            capture="environment"
+            onChange={handleFileSelect}
+          />
+          <button type="button" className="media-button" onClick={() => galleryInputRef.current?.click()}>
+            Gallery
+          </button>
+          <button type="button" className="media-button" onClick={() => cameraInputRef.current?.click()}>
+            Camera
+          </button>
           <input
             value={text}
             onChange={(e) => setText(e.target.value)}
