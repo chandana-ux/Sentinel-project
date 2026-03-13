@@ -1,8 +1,31 @@
 import React, { useEffect, useState } from "react";
 
-const host = window.location.hostname || "127.0.0.1";
-const API_BASE = `http://${host}:8000`;
-const WS_URL = `ws://${host}:8000/ws/alerts`;
+const API_BASE = "https://sentinel-project-la8l.onrender.com";
+const WS_URL = "wss://sentinel-project-la8l.onrender.com/ws/alerts";
+
+const normalizeAlert = (item) => {
+  if (item.alert && item.message) {
+    return {
+      id: item.alert.id,
+      risk: item.alert.risk,
+      created_at: item.alert.created_at,
+      sender_id: item.message.sender_id,
+      receiver_id: item.message.receiver_id,
+      text: item.message.text,
+      reason: item.message.reason,
+    };
+  }
+
+  return {
+    id: item.id ?? Date.now(),
+    risk: item.risk,
+    created_at: item.created_at,
+    sender_id: item.sender_id ?? item.sender ?? "unknown",
+    receiver_id: item.receiver_id ?? item.receiver ?? "unknown",
+    text: item.text ?? item.message ?? "Stored alert",
+    reason: item.reason ?? "",
+  };
+};
 
 const ParentDashboard = () => {
   const [alerts, setAlerts] = useState([]);
@@ -16,7 +39,7 @@ const ParentDashboard = () => {
           throw new Error(`Failed to load alerts: ${res.status}`);
         }
         const data = await res.json();
-        setAlerts(data);
+        setAlerts(data.map(normalizeAlert));
       } catch (err) {
         console.error("Failed to load alerts", err);
       }
@@ -33,20 +56,9 @@ const ParentDashboard = () => {
 
     ws.onmessage = (event) => {
       try {
-        const payload = JSON.parse(event.data);
-        const { alert, message } = payload;
-        setAlerts((prev) => [
-          {
-            id: alert.id,
-            evidence_id: alert.evidence_id,
-            risk: alert.risk,
-            created_at: alert.created_at,
-            sender_id: message.sender_id,
-            receiver_id: message.receiver_id,
-            text: message.text,
-          },
-          ...prev,
-        ]);
+        const alert = JSON.parse(event.data);
+        console.log("Parent alert", alert);
+        setAlerts((prev) => [normalizeAlert(alert), ...prev]);
       } catch (err) {
         console.error("Failed to parse WebSocket message", err);
       }
@@ -107,11 +119,11 @@ const ParentDashboard = () => {
               </div>
               <div className="alert-body">
                 <p className="alert-message">
-                  <strong>Message:</strong> {alert.text || "Stored alert"}
+                  <strong>Message:</strong> {alert.text}
                 </p>
                 <p className="alert-meta">
-                  <strong>Sender:</strong> {alert.sender_id || "unknown"}{" "}
-                  <strong>{"->"} Child:</strong> {alert.receiver_id || "unknown"}
+                  <strong>Sender:</strong> {alert.sender_id} <strong>{"->"} Child:</strong>{" "}
+                  {alert.receiver_id}
                 </p>
               </div>
             </div>

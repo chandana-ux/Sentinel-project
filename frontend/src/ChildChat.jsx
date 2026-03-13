@@ -1,122 +1,113 @@
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 
 const API_BASE = "https://sentinel-project-la8l.onrender.com";
+const CHAT_WS_URL = "wss://sentinel-project-la8l.onrender.com/ws/chat";
 
-const ChildChat = () => {
-  const [senderId] = useState("userB");
-  const [receiverId] = useState("childA");
-  const [input, setInput] = useState("");
+export default function ChildChat() {
   const [messages, setMessages] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [text, setText] = useState("");
   const [error, setError] = useState("");
+  const wsRef = useRef(null);
 
-  const handleSend = async (e) => {
+  useEffect(() => {
+    const ws = new WebSocket(CHAT_WS_URL);
+    wsRef.current = ws;
+
+    ws.onopen = () => {
+      console.log("Chat socket connected");
+    };
+
+    ws.onmessage = (event) => {
+      try {
+        const payload = JSON.parse(event.data);
+        console.log("New chat message", payload);
+        setMessages((prev) => [...prev, payload]);
+      } catch (err) {
+        console.error("Invalid chat payload", err);
+      }
+    };
+
+    ws.onerror = () => {
+      setError("Live chat connection failed.");
+    };
+
+    return () => {
+      ws.close();
+    };
+  }, []);
+
+  const sendMessage = async (e) => {
     e.preventDefault();
-    if (!input.trim()) return;
 
+    if (!text.trim()) return;
+
+    const msg = text.trim();
+    setText("");
     setError("");
-    setLoading(true);
-
-    const text = input.trim();
-    setInput("");
 
     try {
       const res = await fetch(`${API_BASE}/analyze-message`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify({
-          sender_id: senderId,
-          receiver_id: receiverId,
-          message: text,
+          sender_id: "userA",
+          receiver_id: "childA",
+          message: msg,
         }),
       });
 
       if (!res.ok) {
-        throw new Error(`Failed to analyze message: ${res.status}`);
+        throw new Error(`Analyze failed: ${res.status}`);
       }
 
       const data = await res.json();
 
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: Date.now(),
-          sender: senderId,
-          text,
-          risk: data.risk,
-          reason: data.reason,
-        },
-      ]);
+      const payload = {
+        sender: "userA",
+        text: msg,
+        risk: data.risk,
+        reason: data.reason,
+      };
+
+      if (wsRef.current?.readyState === WebSocket.OPEN) {
+        wsRef.current.send(JSON.stringify(payload));
+      } else {
+        setMessages((prev) => [...prev, payload]);
+      }
     } catch (err) {
       console.error(err);
-      setError(
-        "Could not contact safety layer. Check that the backend is running on port 8000."
-      );
-    } finally {
-      setLoading(false);
+      setError("Could not contact safety layer.");
     }
   };
 
   return (
-    <div className="panel">
-      <h2>Child Chat View</h2>
-      <p className="panel-subtitle">
-        Simulated chat between <strong>{senderId}</strong> and child{" "}
-        <strong>{receiverId}</strong>. Each message is checked by the safety
-        layer.
-      </p>
+    <div className="chat-app">
+      <div className="chat-header">Child Safety Chat</div>
 
       <div className="chat-window">
-        {messages.length === 0 && (
-          <div className="empty-state">
-            Start typing messages like <code>Send me your photo</code> or{" "}
-            <code>You are stupid</code> to see the safety response.
-          </div>
-        )}
-        {messages.map((message) => (
-          <div
-            key={message.id}
-            className={`chat-message ${
-              message.risk === "HIGH"
-                ? "high-risk"
-                : message.risk === "MEDIUM"
-                  ? "medium-risk"
-                  : "safe"
-            }`}
-          >
-            <div className="chat-text">{message.text}</div>
-            <div className="chat-meta">
-              <span className={`badge badge-${message.risk.toLowerCase()}`}>
-                {message.risk}
-              </span>
-              {message.risk !== "SAFE" && (
-                <span className="chat-reason">Warning: {message.reason}</span>
-              )}
-              {message.risk === "HIGH" && (
-                <span className="chat-delay">
-                  Message under safety review (delayed for child)
-                </span>
-              )}
-            </div>
+        {messages.map((m, i) => (
+          <div key={`${m.text}-${i}`} className={`msg ${m.risk.toLowerCase()}`}>
+            <div className="msg-text">{m.text}</div>
+            {m.risk !== "SAFE" && (
+              <div className="msg-warning">Warning: {m.reason}</div>
+            )}
           </div>
         ))}
       </div>
 
-      <form className="chat-input-row" onSubmit={handleSend}>
+      <form className="chat-input" onSubmit={sendMessage}>
         <input
-          type="text"
-          placeholder="Type a message to the child..."
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          placeholder="Type message..."
         />
-        <button type="submit" disabled={loading}>
-          {loading ? "Checking..." : "Send"}
-        </button>
+
+        <button type="submit">Send</button>
       </form>
 
       {error && <div className="error-banner">{error}</div>}
     </div>
   );
-};
-
-export default ChildChat;
+}
