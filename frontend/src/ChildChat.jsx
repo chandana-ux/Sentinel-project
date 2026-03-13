@@ -43,9 +43,17 @@ export default function ChildChat() {
 
     const msg = text.trim();
     setText("");
-    setError("");
+
+    const payload = {
+      sender: "userA",
+      text: msg,
+    };
 
     try {
+      if (wsRef.current?.readyState === WebSocket.OPEN) {
+        wsRef.current.send(JSON.stringify(payload));
+      }
+
       const res = await fetch(`${API_BASE}/analyze-message`, {
         method: "POST",
         headers: {
@@ -58,56 +66,78 @@ export default function ChildChat() {
         }),
       });
 
-      if (!res.ok) {
-        throw new Error(`Analyze failed: ${res.status}`);
-      }
-
       const data = await res.json();
 
-      const payload = {
-        sender: "userA",
-        text: msg,
-        risk: data.risk,
-        reason: data.reason,
-      };
-
-      if (wsRef.current?.readyState === WebSocket.OPEN) {
-        wsRef.current.send(JSON.stringify(payload));
-      } else {
-        setMessages((prev) => [...prev, payload]);
-      }
+      setMessages((prev) => [
+        ...prev,
+        {
+          sender: "userA",
+          text: msg,
+          risk: data.risk,
+          reason: data.reason,
+        },
+      ]);
     } catch (err) {
       console.error(err);
-      setError("Could not contact safety layer.");
+      setError("Message failed.");
     }
   };
 
   return (
-    <div className="chat-app">
-      <div className="chat-header">Child Safety Chat</div>
+    <div className="app-layout">
+      <div className="sidebar">
+        <h2>Chats</h2>
 
-      <div className="chat-window">
-        {messages.map((m, i) => (
-          <div key={`${m.text}-${i}`} className={`msg ${m.risk.toLowerCase()}`}>
-            <div className="msg-text">{m.text}</div>
-            {m.risk !== "SAFE" && (
-              <div className="msg-warning">Warning: {m.reason}</div>
-            )}
-          </div>
-        ))}
+        <div className="chat-user active">
+          <img src="https://i.pravatar.cc/40?img=1" alt="Friend 1" />
+          <span>Friend 1</span>
+        </div>
+
+        <div className="chat-user">
+          <img src="https://i.pravatar.cc/40?img=2" alt="Friend 2" />
+          <span>Friend 2</span>
+        </div>
+
+        <div className="chat-user">
+          <img src="https://i.pravatar.cc/40?img=3" alt="Friend 3" />
+          <span>Friend 3</span>
+        </div>
       </div>
 
-      <form className="chat-input" onSubmit={sendMessage}>
-        <input
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          placeholder="Type message..."
-        />
+      <div className="chat-main">
+        <div className="chat-header">
+          <h3>Child Safety Chat</h3>
+          <span className="status">Online</span>
+        </div>
 
-        <button type="submit">Send</button>
-      </form>
+        <div className="chat-window">
+          {messages.map((m, i) => (
+            <div
+              key={i}
+              className={`message ${m.sender === "userA" ? "sent" : "received"}`}
+            >
+              <div className="bubble">{m.text}</div>
+            </div>
+          ))}
+        </div>
 
-      {error && <div className="error-banner">{error}</div>}
+        <form className="chat-input" onSubmit={sendMessage}>
+          <input
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            placeholder="Type message..."
+          />
+          <button type="submit">Send</button>
+        </form>
+
+        {error && <div className="error-banner">{error}</div>}
+      </div>
+
+      <div className="info-panel">
+        <h3>Chat Info</h3>
+        <p>Child protection active</p>
+        <p>Safety AI monitoring</p>
+      </div>
     </div>
   );
 }
