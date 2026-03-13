@@ -46,6 +46,40 @@ export default function ChildChat() {
     };
   }, []);
 
+  useEffect(() => {
+    const handlePaste = (event) => {
+      const items = event.clipboardData?.items ?? [];
+
+      for (const item of items) {
+        if (!item.type.includes("image")) {
+          continue;
+        }
+
+        const file = item.getAsFile();
+        if (!file) {
+          continue;
+        }
+
+        const reader = new FileReader();
+        reader.onload = () => {
+          setMessages((prev) => [
+            ...prev,
+            {
+              sender: "userA",
+              text: "[Image sent]",
+              image: reader.result,
+            },
+          ]);
+        };
+
+        reader.readAsDataURL(file);
+      }
+    };
+
+    window.addEventListener("paste", handlePaste);
+    return () => window.removeEventListener("paste", handlePaste);
+  }, []);
+
   const sendMessage = async (e) => {
     e.preventDefault();
 
@@ -137,6 +171,7 @@ export default function ChildChat() {
                 <div className="bubble">
                   <div className="name">{participant.label}</div>
                   {m.text}
+                  {m.image && <img src={m.image} className="chat-image" alt="Pasted chat content" />}
                 </div>
               </div>
             );

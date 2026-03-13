@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime, timezone
 import importlib
 import os
@@ -131,11 +132,15 @@ def detect_risk(message: str) -> Tuple[str, str]:
 
     text = message.lower()
 
-    grooming = [
-        "send me your photo",
-        "where do you live",
+    grooming_patterns = [
         "how old are you",
+        "where do you live",
         "are your parents home",
+        "send me your photo",
+        "send me a photo",
+        "send picture",
+        "send pic",
+        "show me your photo",
         "dont tell your parents",
         "don't tell your parents",
     ]
@@ -147,9 +152,9 @@ def detect_risk(message: str) -> Tuple[str, str]:
         "nobody likes you",
     ]
 
-    for phrase in grooming:
-        if phrase in text:
-            return "HIGH", f"Grooming pattern detected: {phrase}"
+    for pattern in grooming_patterns:
+        if pattern in text:
+            return "HIGH", f"Grooming attempt detected: {pattern}"
 
     for phrase in bullying:
         if phrase in text:
@@ -258,6 +263,9 @@ async def broadcast_chat_message(payload: Dict[str, Any]) -> None:
 async def analyze_message(data: MessageRequest):
     risk, reason = detect_risk(data.message)
     created_at = utc_now_iso()
+
+    if risk == "HIGH":
+        await asyncio.sleep(5)
 
     record = {
         "id": len(messages) + 1,

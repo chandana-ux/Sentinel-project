@@ -186,6 +186,13 @@ body {
   font-weight: 700;
 }
 
+.chat-image {
+  max-width: 200px;
+  border-radius: 10px;
+  margin-top: 5px;
+  display: block;
+}
+
 .chat-input {
   display: flex;
   padding: 10px;
