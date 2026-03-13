@@ -139,16 +139,21 @@ body {
 .chat-window {
   flex: 1;
   padding: 20px;
+  padding-bottom: 96px;
   overflow-y: auto;
   background: #f9fafb;
 }
 
 .message {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
   margin-bottom: 12px;
 }
 
 .sent {
-  text-align: right;
+  justify-content: flex-end;
+  flex-direction: row-reverse;
 }
 
 .bubble {
@@ -163,6 +168,22 @@ body {
 .received .bubble {
   background: #e5e7eb;
   color: black;
+}
+
+.avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.name {
+  font-size: 11px;
+  color: #64748b;
+  margin-bottom: 6px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-weight: 700;
 }
 
 .chat-input {
@@ -339,5 +360,59 @@ code {
     margin: 0;
     min-height: 100vh;
     border-radius: 0;
+  }
+
+  .app-layout {
+    flex-direction: column;
+  }
+
+  .sidebar {
+    width: 100%;
+    height: 60px;
+    display: flex;
+    overflow-x: auto;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    white-space: nowrap;
+  }
+
+  .chat-main {
+    flex: 1;
+    min-height: 0;
+  }
+
+  .info-panel {
+    display: none;
+  }
+
+  .chat-window {
+    height: calc(100vh - 150px);
+    padding: 16px 14px 110px;
+  }
+
+  .chat-input {
+    position: fixed;
+    bottom: 0;
+    width: 100%;
+    background: white;
+    left: 0;
+    padding: 12px;
+    box-shadow: 0 -8px 24px rgba(15, 23, 42, 0.08);
+    z-index: 20;
+  }
+
+  .chat-input input {
+    min-width: 0;
+  }
+
+  .sidebar h2 {
+    display: none;
+  }
+
+  .chat-user {
+    flex: 0 0 auto;
+    min-width: max-content;
+    background: #374151;
   }
 }

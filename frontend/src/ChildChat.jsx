@@ -2,6 +2,16 @@ import React, { useEffect, useRef, useState } from "react";
 
 const API_BASE = "https://sentinel-project-la8l.onrender.com";
 const CHAT_WS_URL = "wss://sentinel-project-la8l.onrender.com/ws/chat";
+const PARTICIPANTS = {
+  userA: {
+    label: "Person A",
+    avatar: "https://i.pravatar.cc/40?img=1",
+  },
+  userB: {
+    label: "Person B",
+    avatar: "https://i.pravatar.cc/40?img=2",
+  },
+};
 
 export default function ChildChat() {
   const [messages, setMessages] = useState([]);
@@ -83,6 +93,8 @@ export default function ChildChat() {
     }
   };
 
+  const getParticipant = (sender) => PARTICIPANTS[sender] ?? PARTICIPANTS.userB;
+
   return (
     <div className="app-layout">
       <div className="sidebar">
@@ -111,14 +123,24 @@ export default function ChildChat() {
         </div>
 
         <div className="chat-window">
-          {messages.map((m, i) => (
-            <div
-              key={i}
-              className={`message ${m.sender === "userA" ? "sent" : "received"}`}
-            >
-              <div className="bubble">{m.text}</div>
-            </div>
-          ))}
+          {messages.map((m, i) => {
+            const participant = getParticipant(m.sender);
+
+            return (
+              <div key={i} className={`message ${m.sender === "userA" ? "sent" : "received"}`}>
+                <img
+                  className="avatar"
+                  src={participant.avatar}
+                  alt={participant.label}
+                />
+
+                <div className="bubble">
+                  <div className="name">{participant.label}</div>
+                  {m.text}
+                </div>
+              </div>
+            );
+          })}
         </div>
 
         <form className="chat-input" onSubmit={sendMessage}>
